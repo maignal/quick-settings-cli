@@ -14,10 +14,12 @@ type model struct {
 	menuItems             []string
 	audioOutputs          []string
 	bluetoothDevices      []string
+	wifiNetworks          []string // Added
 	cursor                int
 	audioOutputsVisible   bool
 	bluetoothDevicesVisible bool
-	airplaneModeEnabled   bool // Added
+	wifiNetworksVisible   bool // Added
+	airplaneModeEnabled   bool
 }
 
 func (m model) Init() tea.Cmd {
@@ -27,6 +29,36 @@ func (m model) Init() tea.Cmd {
 func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.KeyMsg:
+		// --- Dynamic Index Calculation ---
+		// Calculate the current index of each main menu item
+		// based on which sub-menus are open.
+		audioItemIndex := 0
+
+		bluetoothItemIndex := 1
+		if m.audioOutputsVisible {
+			bluetoothItemIndex += len(m.audioOutputs)
+		}
+
+		wifiItemIndex := 2
+		if m.audioOutputsVisible {
+			wifiItemIndex += len(m.audioOutputs)
+		}
+		if m.bluetoothDevicesVisible {
+			wifiItemIndex += len(m.bluetoothDevices)
+		}
+
+		airplaneModeItemIndex := 3
+		if m.audioOutputsVisible {
+			airplaneModeItemIndex += len(m.audioOutputs)
+		}
+		if m.bluetoothDevicesVisible {
+			airplaneModeItemIndex += len(m.bluetoothDevices)
+		}
+		if m.wifiNetworksVisible {
+			airplaneModeItemIndex += len(m.wifiNetworks)
+		}
+		// --- End Dynamic Index Calculation ---
+
 		switch msg.String() {
 
 		case "q", "ctrl+c":
@@ -35,10 +67,13 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case "esc":
 			if m.audioOutputsVisible {
 				m.audioOutputsVisible = false
-				m.cursor = 0 // "Audio Output" is at index 0
+				m.cursor = 0 // Base index
 			} else if m.bluetoothDevicesVisible {
 				m.bluetoothDevicesVisible = false
-				m.cursor = 1 // "Bluetooth" is at index 1
+				m.cursor = 1 // Base index
+			} else if m.wifiNetworksVisible { // Added
+				m.wifiNetworksVisible = false
+				m.cursor = 2 // Base index
 			} else {
 				return m, tea.Quit
 			}
@@ -56,99 +91,100 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			if m.bluetoothDevicesVisible {
 				totalItems += len(m.bluetoothDevices)
 			}
+			if m.wifiNetworksVisible { // Added
+				totalItems += len(m.wifiNetworks)
+			}
 			if m.cursor < totalItems-1 {
 				m.cursor++
 			}
 
 		case "l": // Expand
-			audioItemIndex := 0
-			bluetoothItemIndex := 1 // Base index in menuItems
-			if m.audioOutputsVisible {
-				bluetoothItemIndex += len(m.audioOutputs)
-			}
-
 			if m.cursor == audioItemIndex { // On "Audio Output"
 				m.audioOutputsVisible = true
-				m.bluetoothDevicesVisible = false // Collapse other
+				m.bluetoothDevicesVisible = false
+				m.wifiNetworksVisible = false // Collapse others
 				if len(m.audioOutputs) > 0 {
 					m.cursor = audioItemIndex + 1
 				}
 			} else if m.cursor == bluetoothItemIndex { // On "Bluetooth"
+				m.audioOutputsVisible = false
 				m.bluetoothDevicesVisible = true
-				m.audioOutputsVisible = false // Collapse other
+				m.wifiNetworksVisible = false // Collapse others
 				if len(m.bluetoothDevices) > 0 {
 					m.cursor = bluetoothItemIndex + 1
+				}
+			} else if m.cursor == wifiItemIndex { // On "WiFi Network"
+				m.audioOutputsVisible = false
+				m.bluetoothDevicesVisible = false
+				m.wifiNetworksVisible = true // Expand this
+				if len(m.wifiNetworks) > 0 {
+					m.cursor = wifiItemIndex + 1
 				}
 			}
 
 		case "h": // Collapse
-			audioItemIndex := 0
-			bluetoothItemIndex := 1 // Base index in menuItems
-			if m.audioOutputsVisible {
-				bluetoothItemIndex += len(m.audioOutputs)
-			}
-
 			if m.audioOutputsVisible && m.cursor > audioItemIndex && m.cursor <= audioItemIndex+len(m.audioOutputs) {
 				m.audioOutputsVisible = false
-				m.cursor = audioItemIndex
+				m.cursor = 0 // Base index
 			} else if m.bluetoothDevicesVisible && m.cursor > bluetoothItemIndex && m.cursor <= bluetoothItemIndex+len(m.bluetoothDevices) {
 				m.bluetoothDevicesVisible = false
-				m.cursor = 1
+				m.cursor = 1 // Base index
+			} else if m.wifiNetworksVisible && m.cursor > wifiItemIndex && m.cursor <= wifiItemIndex+len(m.wifiNetworks) { // Added
+				m.wifiNetworksVisible = false
+				m.cursor = 2 // Base index
 			}
 
 		case "enter", " ":
-			audioItemIndex := 0
-			bluetoothItemIndex := 1 // Base index in menuItems
-			if m.audioOutputsVisible {
-				bluetoothItemIndex += len(m.audioOutputs)
-			}
-
-			// Calculate Airplane Mode index
-			airplaneModeItemIndex := 2 // Base index
-			if m.audioOutputsVisible {
-				airplaneModeItemIndex += len(m.audioOutputs)
-			}
-			if m.bluetoothDevicesVisible {
-				airplaneModeItemIndex += len(m.bluetoothDevices)
-			}
-
-			if m.cursor == audioItemIndex { // "Audio Output" is selected
+			if m.cursor == audioItemIndex { // "Audio Output"
 				m.audioOutputsVisible = !m.audioOutputsVisible
-				m.bluetoothDevicesVisible = false // Collapse other
+				m.bluetoothDevicesVisible = false
+				m.wifiNetworksVisible = false
 				if m.audioOutputsVisible && len(m.audioOutputs) > 0 {
 					m.cursor = audioItemIndex + 1
 				} else {
 					m.cursor = audioItemIndex
 				}
-			} else if m.cursor == bluetoothItemIndex { // "Bluetooth" is selected
+			} else if m.cursor == bluetoothItemIndex { // "Bluetooth"
+				m.audioOutputsVisible = false
 				m.bluetoothDevicesVisible = !m.bluetoothDevicesVisible
-				m.audioOutputsVisible = false // Collapse other
+				m.wifiNetworksVisible = false
 				if m.bluetoothDevicesVisible && len(m.bluetoothDevices) > 0 {
 					m.cursor = bluetoothItemIndex + 1
 				} else {
 					m.cursor = bluetoothItemIndex
 				}
-			} else if m.cursor == airplaneModeItemIndex { // "Airplane Mode" is selected
-				m.airplaneModeEnabled = !m.airplaneModeEnabled
-
-				// Collapse other menus
+			} else if m.cursor == wifiItemIndex { // "WiFi Network"
 				m.audioOutputsVisible = false
 				m.bluetoothDevicesVisible = false
-
-				// Run the toggle command
+				m.wifiNetworksVisible = !m.wifiNetworksVisible
+				if m.wifiNetworksVisible && len(m.wifiNetworks) > 0 {
+					m.cursor = wifiItemIndex + 1
+				} else {
+					m.cursor = wifiItemIndex
+				}
+			} else if m.cursor == airplaneModeItemIndex { // "Airplane Mode"
+				m.airplaneModeEnabled = !m.airplaneModeEnabled
+				m.audioOutputsVisible = false
+				m.bluetoothDevicesVisible = false
+				m.wifiNetworksVisible = false // Collapse others
+				
 				var cmd *exec.Cmd
 				if m.airplaneModeEnabled {
 					cmd = exec.Command("nmcli", "radio", "all", "off")
 				} else {
 					cmd = exec.Command("nmcli", "radio", "all", "on")
 				}
-				cmd.Run() // Fire and forget
+				cmd.Run() 
 
 			} else if m.audioOutputsVisible && m.cursor > audioItemIndex && m.cursor <= audioItemIndex+len(m.audioOutputs) {
 				// An audio device is selected
 				return m, tea.Quit
 			} else if m.bluetoothDevicesVisible && m.cursor > bluetoothItemIndex && m.cursor <= bluetoothItemIndex+len(m.bluetoothDevices) {
 				// A bluetooth device is selected
+				return m, tea.Quit
+			} else if m.wifiNetworksVisible && m.cursor > wifiItemIndex && m.cursor <= wifiItemIndex+len(m.wifiNetworks) { // Added
+				// A wifi network is selected
+				// Add connect logic here
 				return m, tea.Quit
 			}
 		}
@@ -172,7 +208,6 @@ func (m model) View() string {
 		}
 		line := fmt.Sprintf("%s %s", cursor, item)
 
-		// Add status for Airplane Mode
 		if item == "Airplane Mode" {
 			status := "[Off]"
 			if m.airplaneModeEnabled {
@@ -222,6 +257,23 @@ func (m model) View() string {
 				currentItemIndex++
 			}
 		}
+
+		// Render WiFi networks if visible
+		if item == "WiFi Network" && m.wifiNetworksVisible {
+			for _, wifiNetwork := range m.wifiNetworks {
+				wifiCursor := " "
+				if m.cursor == currentItemIndex {
+					wifiCursor = ">"
+				}
+				wifiLine := fmt.Sprintf("  %s %s", wifiCursor, wifiNetwork)
+				if m.cursor == currentItemIndex {
+					s += selectedStyle.Render(wifiLine) + "\n"
+				} else {
+					s += wifiLine + "\n"
+				}
+				currentItemIndex++
+			}
+		}
 	}
 
 	s += "\nPress l/enter to expand, h/esc to collapse, q to quit.\n"
@@ -250,6 +302,32 @@ func getBluetoothDevices() ([]string, error) {
 	return devices, nil
 }
 
+// getWifiNetworks runs `nmcli dev wifi list` and parses SSIDs
+func getWifiNetworks() ([]string, error) {
+	// -t for terse (scriptable) output, -f for fields, rescan
+	cmd := exec.Command("nmcli", "-t", "-f", "SSID", "dev", "wifi", "list", "--rescan", "yes")
+	out, err := cmd.Output()
+	if err != nil {
+		return nil, fmt.Errorf("could not run nmcli: %w. Is NetworkManager running?", err)
+	}
+
+	lines := strings.Split(string(out), "\n")
+	var networks []string
+	seen := make(map[string]bool) // De-duplicate SSIDs
+
+	for _, line := range lines {
+		ssid := line
+		// nmcli can list the same SSID multiple times for different bands/BSSIDs
+		// or list empty lines.
+		if ssid == "" || seen[ssid] {
+			continue
+		}
+		networks = append(networks, ssid)
+		seen[ssid] = true
+	}
+	return networks, nil
+}
+
 // getAirplaneModeStatus checks if 'nmcli radio wifi' reports 'disabled'
 func getAirplaneModeStatus() (bool, error) {
 	cmd := exec.Command("nmcli", "radio", "wifi")
@@ -258,7 +336,6 @@ func getAirplaneModeStatus() (bool, error) {
 		return false, fmt.Errorf("could not check nmcli: %w. Is NetworkManager installed?", err)
 	}
 
-	// Output is "enabled" or "disabled"
 	if strings.Contains(string(out), "disabled") {
 		return true, nil // Radios are off, so Airplane Mode is ON
 	}
@@ -292,6 +369,12 @@ func main() {
 		fmt.Println("Warning: could not get bluetooth devices:", err)
 	}
 
+	// Get WiFi Networks
+	wifiNetworks, err := getWifiNetworks()
+	if err != nil {
+		fmt.Println("Warning: could not get wifi networks:", err)
+	}
+
 	// Get Airplane Mode status
 	airplaneStatus, err := getAirplaneModeStatus()
 	if err != nil {
@@ -299,10 +382,11 @@ func main() {
 	}
 
 	p := tea.NewProgram(model{
-		menuItems:           []string{"Audio Output", "Bluetooth", "Airplane Mode"}, // Updated
+		menuItems:           []string{"Audio Output", "Bluetooth", "WiFi Network", "Airplane Mode"}, // Updated
 		audioOutputs:        audioOutputs,
 		bluetoothDevices:    bluetoothDevices,
-		airplaneModeEnabled: airplaneStatus, // Added
+		wifiNetworks:        wifiNetworks,     // Added
+		airplaneModeEnabled: airplaneStatus,
 	})
 	if err := p.Start(); err != nil {
 		fmt.Printf("Alas, there's been an error: %v", err)
