@@ -13,15 +13,14 @@ import (
 type model struct {
 	menuItems             []string
 	audioOutputs          []string
-	bluetoothDevices      []string // Added
+	bluetoothDevices      []string
 	cursor                int
 	audioOutputsVisible   bool
-	bluetoothDevicesVisible bool // Added
+	bluetoothDevicesVisible bool
+	airplaneModeEnabled   bool // Added
 }
 
 func (m model) Init() tea.Cmd {
-	// Init is the first function that will be called. It returns a command.
-	// We don't need to do anything here, so we'll return nil.
 	return nil
 }
 
@@ -29,12 +28,10 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.KeyMsg:
 		switch msg.String() {
-		
-		// MODIFIED: q and ctrl+c always quit
+
 		case "q", "ctrl+c":
 			return m, tea.Quit
 
-		// NEW: 'esc' conditionally collapses or quits
 		case "esc":
 			if m.audioOutputsVisible {
 				m.audioOutputsVisible = false
@@ -43,7 +40,6 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.bluetoothDevicesVisible = false
 				m.cursor = 1 // "Bluetooth" is at index 1
 			} else {
-				// No sub-menus open, so quit
 				return m, tea.Quit
 			}
 
@@ -68,7 +64,6 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			audioItemIndex := 0
 			bluetoothItemIndex := 1 // Base index in menuItems
 			if m.audioOutputsVisible {
-				// Adjust index if audio list is expanded
 				bluetoothItemIndex += len(m.audioOutputs)
 			}
 
@@ -76,13 +71,13 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.audioOutputsVisible = true
 				m.bluetoothDevicesVisible = false // Collapse other
 				if len(m.audioOutputs) > 0 {
-					m.cursor = audioItemIndex + 1 // Move to first audio item
+					m.cursor = audioItemIndex + 1
 				}
 			} else if m.cursor == bluetoothItemIndex { // On "Bluetooth"
 				m.bluetoothDevicesVisible = true
 				m.audioOutputsVisible = false // Collapse other
 				if len(m.bluetoothDevices) > 0 {
-					m.cursor = bluetoothItemIndex + 1 // Move to first bluetooth item
+					m.cursor = bluetoothItemIndex + 1
 				}
 			}
 
@@ -90,52 +85,70 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			audioItemIndex := 0
 			bluetoothItemIndex := 1 // Base index in menuItems
 			if m.audioOutputsVisible {
-				// Adjust index if audio list is expanded
 				bluetoothItemIndex += len(m.audioOutputs)
 			}
 
-			// If cursor is inside audio list
 			if m.audioOutputsVisible && m.cursor > audioItemIndex && m.cursor <= audioItemIndex+len(m.audioOutputs) {
 				m.audioOutputsVisible = false
-				m.cursor = audioItemIndex // Move to "Audio Output"
+				m.cursor = audioItemIndex
 			} else if m.bluetoothDevicesVisible && m.cursor > bluetoothItemIndex && m.cursor <= bluetoothItemIndex+len(m.bluetoothDevices) {
-				// If cursor is inside bluetooth list
 				m.bluetoothDevicesVisible = false
-				// After collapse, bluetooth index is just 1
-				m.cursor = 1 // Move to "Bluetooth"
+				m.cursor = 1
 			}
 
 		case "enter", " ":
 			audioItemIndex := 0
 			bluetoothItemIndex := 1 // Base index in menuItems
 			if m.audioOutputsVisible {
-				// Adjust index if audio list is expanded
 				bluetoothItemIndex += len(m.audioOutputs)
+			}
+
+			// Calculate Airplane Mode index
+			airplaneModeItemIndex := 2 // Base index
+			if m.audioOutputsVisible {
+				airplaneModeItemIndex += len(m.audioOutputs)
+			}
+			if m.bluetoothDevicesVisible {
+				airplaneModeItemIndex += len(m.bluetoothDevices)
 			}
 
 			if m.cursor == audioItemIndex { // "Audio Output" is selected
 				m.audioOutputsVisible = !m.audioOutputsVisible
 				m.bluetoothDevicesVisible = false // Collapse other
 				if m.audioOutputsVisible && len(m.audioOutputs) > 0 {
-					m.cursor = audioItemIndex + 1 // Move to first audio item
+					m.cursor = audioItemIndex + 1
 				} else {
-					m.cursor = audioItemIndex // Stay on parent if closing
+					m.cursor = audioItemIndex
 				}
 			} else if m.cursor == bluetoothItemIndex { // "Bluetooth" is selected
 				m.bluetoothDevicesVisible = !m.bluetoothDevicesVisible
 				m.audioOutputsVisible = false // Collapse other
 				if m.bluetoothDevicesVisible && len(m.bluetoothDevices) > 0 {
-					m.cursor = bluetoothItemIndex + 1 // Move to first bluetooth item
+					m.cursor = bluetoothItemIndex + 1
 				} else {
-					m.cursor = bluetoothItemIndex // Stay on parent if closing
+					m.cursor = bluetoothItemIndex
 				}
+			} else if m.cursor == airplaneModeItemIndex { // "Airplane Mode" is selected
+				m.airplaneModeEnabled = !m.airplaneModeEnabled
+
+				// Collapse other menus
+				m.audioOutputsVisible = false
+				m.bluetoothDevicesVisible = false
+
+				// Run the toggle command
+				var cmd *exec.Cmd
+				if m.airplaneModeEnabled {
+					cmd = exec.Command("nmcli", "radio", "all", "off")
+				} else {
+					cmd = exec.Command("nmcli", "radio", "all", "on")
+				}
+				cmd.Run() // Fire and forget
+
 			} else if m.audioOutputsVisible && m.cursor > audioItemIndex && m.cursor <= audioItemIndex+len(m.audioOutputs) {
 				// An audio device is selected
-				// You could add logic here to set the device
 				return m, tea.Quit
 			} else if m.bluetoothDevicesVisible && m.cursor > bluetoothItemIndex && m.cursor <= bluetoothItemIndex+len(m.bluetoothDevices) {
 				// A bluetooth device is selected
-				// You could add logic here to connect to the device
 				return m, tea.Quit
 			}
 		}
@@ -147,8 +160,8 @@ func (m model) View() string {
 	s := "Quick Settings\n\n"
 
 	selectedStyle := lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("205"))
+	statusStyle := lipgloss.NewStyle().Faint(true)
 
-	// currentItemIndex tracks the absolute cursor position
 	currentItemIndex := 0
 
 	// Render main menu
@@ -158,6 +171,16 @@ func (m model) View() string {
 			cursor = ">"
 		}
 		line := fmt.Sprintf("%s %s", cursor, item)
+
+		// Add status for Airplane Mode
+		if item == "Airplane Mode" {
+			status := "[Off]"
+			if m.airplaneModeEnabled {
+				status = "[On]"
+			}
+			line = fmt.Sprintf("%s %s %s", cursor, item, statusStyle.Render(status))
+		}
+
 		if m.cursor == currentItemIndex {
 			s += selectedStyle.Render(line) + "\n"
 		} else {
@@ -179,7 +202,7 @@ func (m model) View() string {
 				} else {
 					s += audioLine + "\n"
 				}
-				currentItemIndex++ // Increment for the sub-item
+				currentItemIndex++
 			}
 		}
 
@@ -196,12 +219,12 @@ func (m model) View() string {
 				} else {
 					s += btLine + "\n"
 				}
-				currentItemIndex++ // Increment for the sub-item
+				currentItemIndex++
 			}
 		}
 	}
 
-	s += "\nPress l to expand, h to collapse, enter to select, q to quit.\n"
+	s += "\nPress l/enter to expand, h/esc to collapse, q to quit.\n"
 	return s
 }
 
@@ -210,7 +233,6 @@ func getBluetoothDevices() ([]string, error) {
 	cmd := exec.Command("bluetoothctl", "devices")
 	out, err := cmd.Output()
 	if err != nil {
-		// Note: bluetoothctl might not be installed or service not running
 		return nil, fmt.Errorf("could not run bluetoothctl: %w. Is bluetooth service running?", err)
 	}
 
@@ -220,13 +242,28 @@ func getBluetoothDevices() ([]string, error) {
 		if line != "" {
 			parts := strings.Split(line, " ")
 			if len(parts) > 2 {
-				// Output is "Device XX:XX:XX:XX:XX:XX Device Name"
 				deviceName := strings.Join(parts[2:], " ")
 				devices = append(devices, deviceName)
 			}
 		}
 	}
 	return devices, nil
+}
+
+// getAirplaneModeStatus checks if 'nmcli radio wifi' reports 'disabled'
+func getAirplaneModeStatus() (bool, error) {
+	cmd := exec.Command("nmcli", "radio", "wifi")
+	out, err := cmd.Output()
+	if err != nil {
+		return false, fmt.Errorf("could not check nmcli: %w. Is NetworkManager installed?", err)
+	}
+
+	// Output is "enabled" or "disabled"
+	if strings.Contains(string(out), "disabled") {
+		return true, nil // Radios are off, so Airplane Mode is ON
+	}
+
+	return false, nil // Radios are on, so Airplane Mode is OFF
 }
 
 func main() {
@@ -252,14 +289,20 @@ func main() {
 	// Get Bluetooth Devices
 	bluetoothDevices, err := getBluetoothDevices()
 	if err != nil {
-		// Don't exit, just show a warning and continue with an empty list
 		fmt.Println("Warning: could not get bluetooth devices:", err)
 	}
 
+	// Get Airplane Mode status
+	airplaneStatus, err := getAirplaneModeStatus()
+	if err != nil {
+		fmt.Println("Warning: could not get airplane mode status:", err)
+	}
+
 	p := tea.NewProgram(model{
-		menuItems:        []string{"Audio Output", "Bluetooth"}, // Updated
-		audioOutputs:     audioOutputs,
-		bluetoothDevices: bluetoothDevices, // Added
+		menuItems:           []string{"Audio Output", "Bluetooth", "Airplane Mode"}, // Updated
+		audioOutputs:        audioOutputs,
+		bluetoothDevices:    bluetoothDevices,
+		airplaneModeEnabled: airplaneStatus, // Added
 	})
 	if err := p.Start(); err != nil {
 		fmt.Printf("Alas, there's been an error: %v", err)
