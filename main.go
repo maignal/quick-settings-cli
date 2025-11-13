@@ -29,8 +29,23 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.KeyMsg:
 		switch msg.String() {
-		case "q", "esc", "ctrl+c":
+		
+		// MODIFIED: q and ctrl+c always quit
+		case "q", "ctrl+c":
 			return m, tea.Quit
+
+		// NEW: 'esc' conditionally collapses or quits
+		case "esc":
+			if m.audioOutputsVisible {
+				m.audioOutputsVisible = false
+				m.cursor = 0 // "Audio Output" is at index 0
+			} else if m.bluetoothDevicesVisible {
+				m.bluetoothDevicesVisible = false
+				m.cursor = 1 // "Bluetooth" is at index 1
+			} else {
+				// No sub-menus open, so quit
+				return m, tea.Quit
+			}
 
 		case "up", "k":
 			if m.cursor > 0 {
