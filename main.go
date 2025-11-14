@@ -21,8 +21,7 @@ type model struct {
 	wifiNetworksVisible     bool // Added
 	airplaneModeEnabled     bool
 	quitting                bool
-	// searchForWifi           bool
-	wifiLoading bool
+	wifiLoading             bool
 }
 
 type wifiNetworksMsg []string
@@ -172,7 +171,6 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					m.cursor = bluetoothItemIndex
 				}
 			} else if m.cursor == wifiItemIndex { // "WiFi Network"
-				// m.searchForWifi = true
 				m.audioOutputsVisible = false
 				m.bluetoothDevicesVisible = false
 				m.wifiNetworksVisible = !m.wifiNetworksVisible
