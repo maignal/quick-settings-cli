@@ -11,23 +11,40 @@ import (
 )
 
 type model struct {
-	menuItems             []string
-	audioOutputs          []string
-	bluetoothDevices      []string
-	wifiNetworks          []string // Added
-	cursor                int
-	audioOutputsVisible   bool
+	menuItems               []string
+	audioOutputs            []string
+	bluetoothDevices        []string
+	wifiNetworks            []string // Added
+	cursor                  int
+	audioOutputsVisible     bool
 	bluetoothDevicesVisible bool
-	wifiNetworksVisible   bool // Added
-	airplaneModeEnabled   bool
+	wifiNetworksVisible     bool // Added
+	airplaneModeEnabled     bool
+	quitting                bool
+	// searchForWifi           bool
+	wifiLoading bool
 }
 
+type wifiNetworksMsg []string
+
 func (m model) Init() tea.Cmd {
-	return nil
+	return func() tea.Msg {
+		networks, err := getWifiNetworks()
+		if err != nil {
+			// Handle the error appropriately, maybe log it or send an error message
+			return nil
+		}
+		return wifiNetworksMsg(networks)
+	}
 }
 
 func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
+	case wifiNetworksMsg:
+		m.wifiNetworks = msg
+		m.wifiLoading = false
+		return m, nil
+
 	case tea.KeyMsg:
 		// --- Dynamic Index Calculation ---
 		// Calculate the current index of each main menu item
@@ -62,6 +79,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		switch msg.String() {
 
 		case "q", "ctrl+c":
+			m.quitting = true
 			return m, tea.Quit
 
 		case "esc":
@@ -123,13 +141,13 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 
 		case "h": // Collapse
-			if m.audioOutputsVisible && m.cursor > audioItemIndex && m.cursor <= audioItemIndex+len(m.audioOutputs) {
+			if m.audioOutputsVisible && m.cursor >= audioItemIndex && m.cursor <= audioItemIndex+len(m.audioOutputs) {
 				m.audioOutputsVisible = false
 				m.cursor = 0 // Base index
-			} else if m.bluetoothDevicesVisible && m.cursor > bluetoothItemIndex && m.cursor <= bluetoothItemIndex+len(m.bluetoothDevices) {
+			} else if m.bluetoothDevicesVisible && m.cursor >= bluetoothItemIndex && m.cursor <= bluetoothItemIndex+len(m.bluetoothDevices) {
 				m.bluetoothDevicesVisible = false
 				m.cursor = 1 // Base index
-			} else if m.wifiNetworksVisible && m.cursor > wifiItemIndex && m.cursor <= wifiItemIndex+len(m.wifiNetworks) { // Added
+			} else if m.wifiNetworksVisible && m.cursor >= wifiItemIndex && m.cursor <= wifiItemIndex+len(m.wifiNetworks) { // Added
 				m.wifiNetworksVisible = false
 				m.cursor = 2 // Base index
 			}
@@ -154,6 +172,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					m.cursor = bluetoothItemIndex
 				}
 			} else if m.cursor == wifiItemIndex { // "WiFi Network"
+				// m.searchForWifi = true
 				m.audioOutputsVisible = false
 				m.bluetoothDevicesVisible = false
 				m.wifiNetworksVisible = !m.wifiNetworksVisible
@@ -167,14 +186,14 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.audioOutputsVisible = false
 				m.bluetoothDevicesVisible = false
 				m.wifiNetworksVisible = false // Collapse others
-				
+
 				var cmd *exec.Cmd
 				if m.airplaneModeEnabled {
 					cmd = exec.Command("nmcli", "radio", "all", "off")
 				} else {
 					cmd = exec.Command("nmcli", "radio", "all", "on")
 				}
-				cmd.Run() 
+				cmd.Run()
 
 			} else if m.audioOutputsVisible && m.cursor > audioItemIndex && m.cursor <= audioItemIndex+len(m.audioOutputs) {
 				// An audio device is selected
@@ -193,6 +212,9 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 }
 
 func (m model) View() string {
+	if m.quitting {
+		return ""
+	}
 	s := "Quick Settings\n\n"
 
 	selectedStyle := lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("205"))
@@ -260,18 +282,22 @@ func (m model) View() string {
 
 		// Render WiFi networks if visible
 		if item == "WiFi Network" && m.wifiNetworksVisible {
-			for _, wifiNetwork := range m.wifiNetworks {
-				wifiCursor := " "
-				if m.cursor == currentItemIndex {
-					wifiCursor = ">"
+			if m.wifiLoading {
+				s += "    Loading...\n"
+			} else {
+				for _, wifiNetwork := range m.wifiNetworks {
+					wifiCursor := " "
+					if m.cursor == currentItemIndex {
+						wifiCursor = ">"
+					}
+					wifiLine := fmt.Sprintf("  %s %s", wifiCursor, wifiNetwork)
+					if m.cursor == currentItemIndex {
+						s += selectedStyle.Render(wifiLine) + "\n"
+					} else {
+						s += wifiLine + "\n"
+					}
+					currentItemIndex++
 				}
-				wifiLine := fmt.Sprintf("  %s %s", wifiCursor, wifiNetwork)
-				if m.cursor == currentItemIndex {
-					s += selectedStyle.Render(wifiLine) + "\n"
-				} else {
-					s += wifiLine + "\n"
-				}
-				currentItemIndex++
 			}
 		}
 	}
@@ -369,12 +395,6 @@ func main() {
 		fmt.Println("Warning: could not get bluetooth devices:", err)
 	}
 
-	// Get WiFi Networks
-	wifiNetworks, err := getWifiNetworks()
-	if err != nil {
-		fmt.Println("Warning: could not get wifi networks:", err)
-	}
-
 	// Get Airplane Mode status
 	airplaneStatus, err := getAirplaneModeStatus()
 	if err != nil {
@@ -385,8 +405,9 @@ func main() {
 		menuItems:           []string{"Audio Output", "Bluetooth", "WiFi Network", "Airplane Mode"}, // Updated
 		audioOutputs:        audioOutputs,
 		bluetoothDevices:    bluetoothDevices,
-		wifiNetworks:        wifiNetworks,     // Added
+		wifiNetworks:        []string{}, // Initialized as empty
 		airplaneModeEnabled: airplaneStatus,
+		wifiLoading:         true,
 	})
 	if err := p.Start(); err != nil {
 		fmt.Printf("Alas, there's been an error: %v", err)
