@@ -151,6 +151,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.wifiNetworksVisible = false
 				m.cursor = 2 // Base index
 			} else {
+				m.quitting = true
 				return m, tea.Quit
 			}
 
