@@ -318,7 +318,7 @@ func (m model) View() string {
 	s := "Quick Settings\n\n"
 
 	selectedStyle := lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("205"))
-	statusStyle := lipgloss.NewStyle().Faint(true)
+	statusStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("245"))
 
 	const nameColumnWidth = 25 // Adjust as needed for proper alignment
 
@@ -331,11 +331,10 @@ func (m model) View() string {
 			cursor = ">"
 		}
 		line := fmt.Sprintf("%s %s", cursor, item)
-
 		if item == "Airplane Mode" {
-			status := "[Off]"
+			status := "Off"
 			if m.airplaneModeEnabled {
-				status = "[On]"
+				status = "On"
 			}
 			// Pad the item name to align the status
 			paddedItem := fmt.Sprintf("%-*s", nameColumnWidth, item)
