@@ -31,14 +31,24 @@ This tool also relies on the following system commands:
    cd quick-settings-cli
    ```
 
-2. **Build the project:**
+2. **Build and install the project:**
    ```sh
-   go build
+   go build -o qs
+   mkdir -p ~/.local/bin
+   mv qs ~/.local/bin/
+   ```
+   Ensure `~/.local/bin` is in your system's PATH. If not, add it by editing your shell's configuration file (e.g., `~/.bashrc`, `~/.zshrc`):
+   ```sh
+   echo 'export PATH="$HOME/.local/bin:$PATH"' >> ~/.bashrc
+   source ~/.bashrc
+   # Or for zsh
+   # echo 'export PATH="$HOME/.local/bin:$PATH"' >> ~/.zshrc
+   # source ~/.zshrc
    ```
 
 3. **Run the application:**
    ```sh
-   ./quick-settings-cli
+   qs
    ```
 
 ## Usage

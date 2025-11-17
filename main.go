@@ -91,13 +91,16 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.wifiNetworks = msg
 		m.wifiLoading = false
 		m.connectingWifiNetwork = ""
+		m.clampCursor()
 		return m, nil
 	case audioOutputsMsg:
 		m.audioOutputs = msg
+		m.clampCursor()
 		return m, nil
 
 	case bluetoothDevicesMsg:
 		m.bluetoothDevices = msg
+		m.clampCursor()
 		return m, nil
 
 	case tickMsg:
@@ -287,6 +290,25 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 	}
 	return m, nil
+}
+
+func (m *model) clampCursor() {
+	totalItems := len(m.menuItems)
+	if m.audioOutputsVisible {
+		totalItems += len(m.audioOutputs)
+	}
+	if m.bluetoothDevicesVisible {
+		totalItems += len(m.bluetoothDevices)
+	}
+	if m.wifiNetworksVisible {
+		totalItems += len(m.wifiNetworks)
+	}
+	if m.cursor >= totalItems {
+		m.cursor = totalItems - 1
+	}
+	if m.cursor < 0 {
+		m.cursor = 0
+	}
 }
 
 func (m model) View() string {
@@ -502,6 +524,23 @@ func selectBluetoothDevice(deviceName string) error {
 
 // getWifiNetworks runs `nmcli dev wifi list` and parses SSIDs
 func getWifiNetworks() ([]Pair, error) {
+	// Get currently active Wi-Fi network
+	activeWifiCmd := exec.Command("nmcli", "-t", "-f", "active,ssid", "dev", "wifi")
+	activeWifiOut, err := activeWifiCmd.Output()
+	var activeSSID string
+	if err == nil {
+		activeWifiLines := strings.Split(string(activeWifiOut), "\n")
+		for _, line := range activeWifiLines {
+			if strings.HasPrefix(line, "yes:") {
+				parts := strings.SplitN(line, ":", 2)
+				if len(parts) == 2 {
+					activeSSID = parts[1]
+					break
+				}
+			}
+		}
+	}
+
 	// -t for terse (scriptable) output, -f for fields, rescan
 	cmd := exec.Command("nmcli", "-t", "-f", "SSID,ACTIVE", "dev", "wifi", "list", "--rescan", "yes")
 	out, err := cmd.Output()
@@ -523,6 +562,11 @@ func getWifiNetworks() ([]Pair, error) {
 		}
 		ssid := parts[0]
 		active := parts[1] == "yes"
+
+		// If this SSID matches the activeSSID, mark it as connected
+		if ssid == activeSSID {
+			active = true
+		}
 
 		if ssid == "" || seen[ssid] {
 			continue
