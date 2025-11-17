@@ -1,5 +1,5 @@
 # Quick Settings CLI
-![Screencast From 2025-11-13 10-56-36](https://github.com/user-attachments/assets/2b44c33f-52ff-4127-a89a-9134e2745cf9)
+![qs_demo](https://github.com/user-attachments/assets/204169ed-413e-4ff4-8c42-6b9195c50df8)
 
 A command-line tool for managing system settings like audio output, Bluetooth, Wi-Fi, and airplane mode. This tool provides a simple and efficient way to manage your system's settings directly from the terminal.
 
