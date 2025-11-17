@@ -58,10 +58,3 @@ This tool also relies on the following system commands:
 - Press **h** or **esc** to collapse a menu item.
 - Press **q** or **ctrl+c** to quit the application.
 
-## TODO
-
-- [ ] Add support for connecting to Bluetooth devices.
-- [ ] Add support for connecting to Wi-Fi networks.
-- [ ] Add support for more system settings (e.g., display brightness, volume control).
-- [ ] Add a configuration file for customizing the tool's behavior.
-- [ ] Improve error handling and provide more informative error messages.
